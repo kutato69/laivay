@@ -18,13 +18,17 @@ h1{font-size:22px;margin:0 0 4px}
 .card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:16px;margin-bottom:16px}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
 label{display:block;font-size:13px;color:var(--mut);margin-bottom:4px}
-input,select{width:100%;padding:9px 10px;border:1px solid var(--bd);border-radius:8px;background:var(--bg);color:var(--tx);font:inherit}
+input,select{width:100%;padding:9px 10px;border:1px solid var(--bd);border-radius:8px;background:var(--bg);color:var(--tx);font:inherit;font-size:16px;min-height:44px}
 .methods{display:grid;gap:8px;margin:14px 0}
 .m{display:flex;gap:10px;align-items:flex-start;border:1px solid var(--bd);border-radius:10px;padding:10px;cursor:pointer}
 .m input{width:auto;margin-top:4px}
 .m.on{border-color:var(--ac);background:var(--ac2)}
 .m b{display:block}.m span{color:var(--mut);font-size:13px}
-button{background:var(--ac);color:#fff;border:0;border-radius:8px;padding:10px 18px;font:inherit;font-weight:600;cursor:pointer}
+.btns{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+button{background:var(--ac);color:#fff;border:0;border-radius:10px;padding:10px 18px;min-height:46px;font:inherit;font-weight:600;cursor:pointer}
+button.sec{background:var(--card);color:var(--ac);border:1.5px solid var(--ac)}
+button[hidden]{display:none}
+#st{font-size:13px;color:var(--mut)}
 .sum{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
 .sum div{background:var(--ac2);border-radius:10px;padding:10px 12px}
 .sum small{color:var(--mut);display:block;font-size:12px}
@@ -36,6 +40,27 @@ th{background:var(--hd);position:sticky;top:0;font-size:13px}
 th:first-child,td:first-child,th:nth-child(2),td:nth-child(2){text-align:center}
 tfoot td{font-weight:700;background:var(--hd)}
 .note{font-size:13px;color:var(--mut);margin-top:8px}
+@media (max-width:640px){
+.wrap{padding:14px 10px 32px}
+h1{font-size:19px}
+.card{padding:12px}
+.grid{grid-template-columns:1fr 1fr}
+.grid>div:first-child{grid-column:1/-1}
+.btns button{flex:1 1 0}
+.sum{grid-template-columns:1fr 1fr}
+.card.tw{background:none;border:0;padding:0;overflow:visible}
+table,tbody,tfoot{display:block;min-width:0}
+thead{display:none}
+tr{display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:12px;margin-bottom:10px}
+td,tfoot td{display:block;border:0;padding:0;text-align:left!important;white-space:normal;background:none}
+td::before{content:attr(data-label);display:block;font-size:11px;color:var(--mut)}
+td:empty{display:none}
+tbody td:nth-child(1){font-weight:700;color:var(--ac)}
+tbody td:nth-child(6){grid-column:1/-1;font-weight:700;font-size:17px;background:var(--ac2);border-radius:8px;padding:6px 8px}
+tfoot tr{border-color:var(--ac)}
+tfoot td:first-child{grid-column:1/-1}
+tfoot td:first-child::before{content:none}
+}
 </style>
 </head>
 <body>
@@ -55,7 +80,7 @@ tfoot td{font-weight:700;background:var(--hd)}
 <label class="m"><input type="radio" name="m" value="nk"><div><b>Dư nợ giảm dần – trả đều gốc + lãi (niên kim)</b><span>Số tiền trả mỗi kỳ bằng nhau; lãi giảm dần, gốc tăng dần.</span></div></label>
 <label class="m"><input type="radio" name="m" value="cd"><div><b>Lãi cố định (trên dư nợ gốc ban đầu)</b><span>Lãi mỗi kỳ không đổi, tính trên số tiền vay ban đầu dù đã trả gốc.</span></div></label>
 </div>
-<button id="go">Tính lãi</button>
+<div class="btns"><button id="go">Tính lãi</button><button id="csv" class="sec" hidden>⬇ Tải CSV</button><span id="st"></span></div>
 </div>
 
 <div class="card">
@@ -94,14 +119,26 @@ else{lai=Math.round(P*i);goc=k===N?bal:Math.round(P/N)}
 var end=bal-goc;
 rows.push([k,fd(addM(st,k)),bal,goc,lai,goc+lai,end]);
 tg+=goc;tl+=lai;bal=end}
-$("tb").innerHTML=rows.map(function(r){return "<tr><td>"+r[0]+"</td><td>"+r[1]+"</td>"+r.slice(2).map(function(v){return "<td>"+f.format(v)+"</td>"}).join("")+"</tr>"}).join("");
-$("tf").innerHTML="<tr><td colspan='3'>Tổng cộng</td><td>"+f.format(tg)+"</td><td>"+f.format(tl)+"</td><td>"+f.format(tg+tl)+"</td><td></td></tr>";
+LAST={rows:rows,tg:tg,tl:tl};
+var LB=["Kỳ","Ngày trả","Dư nợ đầu kỳ","Gốc phải trả","Lãi phải trả","Tổng phải trả","Dư nợ cuối kỳ"];
+$("tb").innerHTML=rows.map(function(r){return "<tr>"+r.map(function(v,j){return "<td data-label='"+(j===0?"Kỳ":LB[j])+"'>"+(j<2?v:f.format(v))+"</td>"}).join("")+"</tr>"}).join("");
+$("tf").innerHTML="<tr><td colspan='3'>Tổng cộng</td><td data-label='Tổng gốc'>"+f.format(tg)+"</td><td data-label='Tổng lãi'>"+f.format(tl)+"</td><td data-label='Tổng gốc + lãi'>"+f.format(tg+tl)+"</td><td></td></tr>";
 var first=rows[0][5],lastv=rows[N-1][5];
 $("sum").innerHTML=[["Tổng lãi",f.format(tl)],["Tổng gốc + lãi",f.format(tg+tl)],["Kỳ đầu phải trả",f.format(first)],["Kỳ cuối phải trả",f.format(lastv)]].map(function(a){return "<div><small>"+a[0]+"</small><strong>"+a[1]+"</strong></div>"}).join("");
 var nt=m==="cd"?"Lãi cố định: lãi suất thực tế trên dư nợ giảm dần cao hơn mức "+R+"%/năm nhập vào (xấp xỉ gấp 2 lần với khoản trả gốc đều).":m==="nk"?"Niên kim: số tiền trả hằng tháng gần như bằng nhau (kỳ cuối điều chỉnh làm tròn).":"Gốc đều: tổng trả giảm dần theo từng kỳ vì lãi tính trên dư nợ còn lại.";
 $("note").textContent=nt+" Lãi tính theo tháng = lãi suất năm / 12.";
 }
 $("go").onclick=calc;
+var LAST=null,DL=null;
+if(window.claude&&claude.use){claude.use("downloads").then(function(d){DL=d;if(d)$("csv").hidden=false}).catch(function(){})}
+$("csv").onclick=function(){
+if(!DL||!LAST)return;
+var h=["Kỳ","Ngày trả","Dư nợ đầu kỳ","Gốc phải trả","Lãi phải trả","Tổng phải trả","Dư nợ cuối kỳ"];
+var L=[h.join(";")].concat(LAST.rows.map(function(r){return r.join(";")}));
+L.push(["Tổng cộng","","",LAST.tg,LAST.tl,LAST.tg+LAST.tl,""].join(";"));
+var st=$("st");st.textContent="";
+DL.save({filename:"lich-tra-no.csv",data:"\uFEFF"+L.join("\r\n")}).then(function(){st.textContent="Đã lưu file"}).catch(function(e){st.textContent=e&&e.code==="declined"?"":"Không tải được file"});
+};
 document.querySelectorAll("input[name=m]").forEach(function(e){e.addEventListener("change",function(){document.querySelectorAll(".m").forEach(function(x){x.classList.toggle("on",x.querySelector("input").checked)});calc()})});
 ["r","n","d","p"].forEach(function(id){$(id).addEventListener("input",calc)});
 calc();
