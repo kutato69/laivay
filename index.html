@@ -80,7 +80,7 @@ tfoot td:first-child::before{content:none}
 <label class="m"><input type="radio" name="m" value="nk"><div><b>Dư nợ giảm dần – trả đều gốc + lãi (niên kim)</b><span>Số tiền trả mỗi kỳ bằng nhau; lãi giảm dần, gốc tăng dần.</span></div></label>
 <label class="m"><input type="radio" name="m" value="cd"><div><b>Lãi cố định (trên dư nợ gốc ban đầu)</b><span>Lãi mỗi kỳ không đổi, tính trên số tiền vay ban đầu dù đã trả gốc.</span></div></label>
 </div>
-<div class="btns"><button id="go">Tính lãi</button><button id="csv" class="sec" hidden>⬇ Tải CSV</button><span id="st"></span></div>
+<div class="btns"><button id="go">Tính lãi</button><button id="xl" class="sec">⬇ Tải Excel</button><span id="st"></span></div>
 </div>
 
 <div class="card">
@@ -97,6 +97,7 @@ tfoot td:first-child::before{content:none}
 </div>
 </div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
 <script>
 var f=new Intl.NumberFormat("vi-VN");
 var $=function(i){return document.getElementById(i)};
@@ -109,7 +110,7 @@ function calc(){
 var P=num($("p").value),R=parseFloat($("r").value)||0,N=Math.max(1,parseInt($("n").value)||1);
 var m=document.querySelector("input[name=m]:checked").value;
 var st=$("d").value?new Date($("d").value+"T00:00"):new Date();
-var i=R/100/12,bal=P,rows=[],tg=0,tl=0;
+var i=R/100/12,bal=P,rows=[],tg=0,tl=0,DT=[];
 var pmt=i===0?P/N:P*i/(1-Math.pow(1+i,-N));
 for(var k=1;k<=N;k++){
 var lai,goc;
@@ -117,9 +118,9 @@ if(m==="gd"){lai=Math.round(bal*i);goc=k===N?bal:Math.round(P/N)}
 else if(m==="nk"){lai=Math.round(bal*i);goc=k===N?bal:Math.round(pmt)-lai}
 else{lai=Math.round(P*i);goc=k===N?bal:Math.round(P/N)}
 var end=bal-goc;
-rows.push([k,fd(addM(st,k)),bal,goc,lai,goc+lai,end]);
+var dt=addM(st,k);DT.push(dt);rows.push([k,fd(dt),bal,goc,lai,goc+lai,end]);
 tg+=goc;tl+=lai;bal=end}
-LAST={rows:rows,tg:tg,tl:tl};
+LAST={rows:rows,tg:tg,tl:tl,dt:DT,P:P,R:R,N:N,m:m,st:st};
 var LB=["Kỳ","Ngày trả","Dư nợ đầu kỳ","Gốc phải trả","Lãi phải trả","Tổng phải trả","Dư nợ cuối kỳ"];
 $("tb").innerHTML=rows.map(function(r){return "<tr>"+r.map(function(v,j){return "<td data-label='"+(j===0?"Kỳ":LB[j])+"'>"+(j<2?v:f.format(v))+"</td>"}).join("")+"</tr>"}).join("");
 $("tf").innerHTML="<tr><td colspan='3'>Tổng cộng</td><td data-label='Tổng gốc'>"+f.format(tg)+"</td><td data-label='Tổng lãi'>"+f.format(tl)+"</td><td data-label='Tổng gốc + lãi'>"+f.format(tg+tl)+"</td><td></td></tr>";
@@ -130,14 +131,52 @@ $("note").textContent=nt+" Lãi tính theo tháng = lãi suất năm / 12.";
 }
 $("go").onclick=calc;
 var LAST=null,DL=null;
-if(window.claude&&claude.use){claude.use("downloads").then(function(d){DL=d;if(d)$("csv").hidden=false}).catch(function(){})}
-$("csv").onclick=function(){
-if(!DL||!LAST)return;
-var h=["Kỳ","Ngày trả","Dư nợ đầu kỳ","Gốc phải trả","Lãi phải trả","Tổng phải trả","Dư nợ cuối kỳ"];
-var L=[h.join(";")].concat(LAST.rows.map(function(r){return r.join(";")}));
-L.push(["Tổng cộng","","",LAST.tg,LAST.tl,LAST.tg+LAST.tl,""].join(";"));
-var st=$("st");st.textContent="";
-DL.save({filename:"lich-tra-no.csv",data:"\uFEFF"+L.join("\r\n")}).then(function(){st.textContent="Đã lưu file"}).catch(function(e){st.textContent=e&&e.code==="declined"?"":"Không tải được file"});
+if(window.claude&&claude.use){claude.use("downloads").then(function(d){DL=d}).catch(function(){})}
+$("xl").onclick=async function(){
+if(!LAST)return;
+var st=$("st"),btn=$("xl");
+if(!window.ExcelJS){st.textContent="Chưa tải được thư viện Excel (cần kết nối mạng)";return}
+btn.disabled=true;st.textContent="Đang tạo file...";
+try{
+var X=LAST,wb=new ExcelJS.Workbook();wb.creator="Bảng tính lãi vay";
+var ws=wb.addWorksheet("Lịch trả nợ",{views:[{state:"frozen",ySplit:10,showGridLines:false}],pageSetup:{orientation:"landscape",fitToPage:true,fitToWidth:1,fitToHeight:0,paperSize:9,printTitlesRow:"10:10"}});
+var G="FF0F6E56",G2="FFE3F4EE",G3="FFF4FAF7",GR="FFF3F4F6",BD={style:"thin",color:{argb:"FFD0D7DE"}},B={top:BD,left:BD,bottom:BD,right:BD};
+var W=[8,14,20,18,18,20,20];W.forEach(function(w,i){ws.getColumn(i+1).width=w});
+ws.mergeCells("A1:G1");var t=ws.getCell("A1");t.value="BẢNG TÍNH LÃI VAY";t.font={name:"Arial",size:20,bold:true,color:{argb:G}};t.alignment={horizontal:"left",vertical:"middle"};ws.getRow(1).height=34;
+ws.mergeCells("A2:G2");var s=ws.getCell("A2");s.value="Lịch trả nợ chi tiết theo từng kỳ";s.font={name:"Arial",size:10,italic:true,color:{argb:"FF667085"}};
+for(var c=1;c<=7;c++){ws.getCell(3,c).border={bottom:{style:"medium",color:{argb:G}}}}
+var MN={gd:"Dư nợ giảm dần – gốc trả đều",nk:"Dư nợ giảm dần – niên kim (gốc + lãi đều)",cd:"Lãi cố định trên dư nợ gốc ban đầu"};
+var info=[["Số tiền vay (VNĐ)",X.P,"#,##0"],["Lãi suất (%/năm)",X.R/100,"0.00%"],["Thời hạn (tháng)",X.N,"0"],["Ngày giải ngân",X.st,"dd/mm/yyyy"],["Phương thức tính lãi",MN[X.m],"@"]];
+info.forEach(function(a,i){var r=4+i;ws.mergeCells(r,1,r,2);ws.mergeCells(r,3,r,5);
+var l=ws.getCell(r,1),v=ws.getCell(r,3);l.value=a[0];v.value=a[1];v.numFmt=a[2];
+l.font={name:"Arial",size:10,bold:true,color:{argb:"FF344054"}};l.fill={type:"pattern",pattern:"solid",fgColor:{argb:GR}};
+v.font={name:"Arial",size:10,bold:true};v.alignment={horizontal:"left"};
+for(var c=1;c<=5;c++)ws.getCell(r,c).border=B});
+var H=["Kỳ","Ngày trả","Dư nợ đầu kỳ","Gốc phải trả","Lãi phải trả","Tổng phải trả","Dư nợ cuối kỳ"];
+var hr=ws.getRow(10);hr.height=30;
+H.forEach(function(h,i){var c=hr.getCell(i+1);c.value=h;c.font={name:"Arial",size:10,bold:true,color:{argb:"FFFFFFFF"}};c.fill={type:"pattern",pattern:"solid",fgColor:{argb:G}};c.alignment={horizontal:"center",vertical:"middle",wrapText:true};c.border=B});
+X.rows.forEach(function(r,i){var n=11+i,row=ws.getRow(n);
+row.getCell(1).value=r[0];row.getCell(2).value=X.dt[i];
+row.getCell(3).value=i===0?{formula:"$C$4",result:r[2]}:{formula:"G"+(n-1),result:r[2]};
+row.getCell(4).value=r[3];row.getCell(5).value=r[4];
+row.getCell(6).value={formula:"D"+n+"+E"+n,result:r[5]};
+row.getCell(7).value={formula:"C"+n+"-D"+n,result:r[6]};
+for(var c=1;c<=7;c++){var x=row.getCell(c);x.font={name:"Arial",size:10,bold:c===6};x.border=B;
+if(i%2===1)x.fill={type:"pattern",pattern:"solid",fgColor:{argb:G3}};
+if(c===1||c===2)x.alignment={horizontal:"center"};else{x.numFmt="#,##0";x.alignment={horizontal:"right"}}
+if(c===2)x.numFmt="dd/mm/yyyy"}});
+var f1=11,fl=10+X.N,tn=fl+1,tr=ws.getRow(tn);tr.height=24;
+ws.mergeCells(tn,1,tn,3);tr.getCell(1).value="TỔNG CỘNG";
+[[4,X.tg],[5,X.tl],[6,X.tg+X.tl]].forEach(function(a){var L=String.fromCharCode(64+a[0]);tr.getCell(a[0]).value={formula:"SUM("+L+f1+":"+L+fl+")",result:a[1]}});
+for(var c=1;c<=7;c++){var y=tr.getCell(c);y.font={name:"Arial",size:11,bold:true,color:{argb:G}};y.fill={type:"pattern",pattern:"solid",fgColor:{argb:G2}};y.border={top:{style:"medium",color:{argb:G}},bottom:{style:"medium",color:{argb:G}},left:BD,right:BD};y.alignment={horizontal:c===1?"center":"right",vertical:"middle"};if(c>3)y.numFmt="#,##0"}
+ws.getCell(tn+2,1).value="Lưu ý: lãi tháng = lãi suất năm / 12; số liệu làm tròn đến đồng. Kết quả chỉ mang tính tham khảo.";
+ws.getCell(tn+2,1).font={name:"Arial",size:9,italic:true,color:{argb:"FF667085"}};
+var buf=await wb.xlsx.writeBuffer();
+var o={filename:"lich-tra-no.xlsx",data:buf};
+if(DL){await DL.save(o)}else{var b=new Blob([buf],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"});var a=document.createElement("a");a.href=URL.createObjectURL(b);a.download=o.filename;document.body.appendChild(a);a.click();a.remove()}
+st.textContent="Đã lưu file Excel";
+}catch(e){st.textContent=e&&e.code==="declined"?"":"Không tạo được file Excel"}
+btn.disabled=false;
 };
 document.querySelectorAll("input[name=m]").forEach(function(e){e.addEventListener("change",function(){document.querySelectorAll(".m").forEach(function(x){x.classList.toggle("on",x.querySelector("input").checked)});calc()})});
 ["r","n","d","p"].forEach(function(id){$(id).addEventListener("input",calc)});
